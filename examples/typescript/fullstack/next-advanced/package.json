@@ -9,13 +9,13 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@coinbase/onchainkit": "latest",
+    "@coinbase/onchainkit": "1.0.0",
     "next": "^15.3.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "@tanstack/react-query": "^5",
     "viem": "^2.21.26",
-    "wagmi": "^2.15.6",
+    "wagmi": "^3.0.0",
     "x402": "workspace:*"
   },
   "devDependencies": {
