@@ -270,9 +270,21 @@ func (e *RouteConfigurationError) Error() string {
 // x402HTTPResourceServer provides HTTP-specific payment handling
 type x402HTTPResourceServer struct {
 	*x402.X402ResourceServer
-	compiledRoutes        []CompiledRoute
-	paywallProvider       PaywallProvider
-	protectedRequestHooks []ProtectedRequestHook
+	compiledRoutes                 []CompiledRoute
+	paywallProvider                PaywallProvider
+	protectedRequestHooks          []ProtectedRequestHook
+	extensionProtectedRequestHooks []scopedProtectedRequestHook
+}
+
+type scopedProtectedRequestHook struct {
+	key  string
+	hook ProtectedRequestHook
+}
+
+// ResourceServerExtensionProtectedRequestHookProvider lets resource server
+// extensions expose HTTP protected request hooks.
+type ResourceServerExtensionProtectedRequestHookProvider interface {
+	ProtectedRequestHook() ProtectedRequestHook
 }
 
 // Newx402HTTPResourceServer creates a new HTTP resource server
@@ -317,6 +329,20 @@ func (s *x402HTTPResourceServer) GetCompiledRoutes() []CompiledRoute {
 // by per-route CustomPaywallHTML. Returns the server for method chaining.
 func (s *x402HTTPResourceServer) RegisterPaywallProvider(provider PaywallProvider) *x402HTTPResourceServer {
 	s.paywallProvider = provider
+	return s
+}
+
+// RegisterExtension registers a resource server extension and any HTTP hook it provides.
+func (s *x402HTTPResourceServer) RegisterExtension(extension types.ResourceServerExtension) *x402HTTPResourceServer {
+	s.X402ResourceServer.RegisterExtension(extension)
+	if provider, ok := extension.(ResourceServerExtensionProtectedRequestHookProvider); ok {
+		if hook := provider.ProtectedRequestHook(); hook != nil {
+			s.extensionProtectedRequestHooks = append(s.extensionProtectedRequestHooks, scopedProtectedRequestHook{
+				key:  extension.Key(),
+				hook: hook,
+			})
+		}
+	}
 	return s
 }
 
@@ -476,37 +502,22 @@ func (s *x402HTTPResourceServer) ProcessHTTPRequest(ctx context.Context, reqCtx 
 
 	// Execute protected request hooks before any payment processing
 	for _, hook := range s.protectedRequestHooks {
-		result, err := hook(ctx, reqCtx, *routeConfig)
-		if err != nil {
-			return HTTPProcessResult{
-				Type: ResultPaymentError,
-				Response: &HTTPResponseInstructions{
-					Status:  500,
-					Headers: map[string]string{"Content-Type": "application/json"},
-					Body:    map[string]string{"error": fmt.Sprintf("protected request hook error: %v", err)},
-				},
-			}
+		if result, done := processProtectedRequestHook(ctx, reqCtx, *routeConfig, hook); done {
+			return result
 		}
-		if result != nil {
-			if result.GrantAccess {
-				return HTTPProcessResult{Type: ResultNoPaymentRequired}
-			}
-			if result.Abort {
-				return HTTPProcessResult{
-					Type: ResultPaymentError,
-					Response: &HTTPResponseInstructions{
-						Status:  403,
-						Headers: map[string]string{"Content-Type": "application/json"},
-						Body:    map[string]string{"error": result.Reason},
-					},
-				}
-			}
+	}
+	for _, scopedHook := range s.extensionProtectedRequestHooks {
+		if _, declared := routeConfig.Extensions[scopedHook.key]; !declared {
+			continue
+		}
+		if result, done := processProtectedRequestHook(ctx, reqCtx, *routeConfig, scopedHook.hook); done {
+			return result
 		}
 	}
 
 	// Get payment options from route config
 	paymentOptions := routeConfig.Accepts
-	if len(paymentOptions) == 0 {
+	if len(paymentOptions) == 0 && len(routeConfig.Extensions) == 0 {
 		return HTTPProcessResult{Type: ResultNoPaymentRequired}
 	}
 
@@ -694,6 +705,42 @@ func (s *x402HTTPResourceServer) ProcessHTTPRequest(ctx context.Context, reqCtx 
 		result.CancellationDispatcher = s.CreatePaymentCancellationDispatcherWithExtensions(ctx, *typedPayload, *matchingReqs, extensions)
 	}
 	return result
+}
+
+func processProtectedRequestHook(
+	ctx context.Context,
+	reqCtx HTTPRequestContext,
+	routeConfig RouteConfig,
+	hook ProtectedRequestHook,
+) (HTTPProcessResult, bool) {
+	result, err := hook(ctx, reqCtx, routeConfig)
+	if err != nil {
+		return HTTPProcessResult{
+			Type: ResultPaymentError,
+			Response: &HTTPResponseInstructions{
+				Status:  500,
+				Headers: map[string]string{"Content-Type": "application/json"},
+				Body:    map[string]string{"error": fmt.Sprintf("protected request hook error: %v", err)},
+			},
+		}, true
+	}
+	if result == nil {
+		return HTTPProcessResult{}, false
+	}
+	if result.GrantAccess {
+		return HTTPProcessResult{Type: ResultNoPaymentRequired}, true
+	}
+	if result.Abort {
+		return HTTPProcessResult{
+			Type: ResultPaymentError,
+			Response: &HTTPResponseInstructions{
+				Status:  403,
+				Headers: map[string]string{"Content-Type": "application/json"},
+				Body:    map[string]string{"error": result.Reason},
+			},
+		}, true
+	}
+	return HTTPProcessResult{}, false
 }
 
 // RequiresPayment checks if a request requires payment based on route configuration
