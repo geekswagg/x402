@@ -11,6 +11,7 @@
     "keeta",
     "stellar",
     "tvm",
+    "near",
     "ccd"
   ],
   "x402Versions": [
@@ -64,6 +65,10 @@
       "TONAPI_API_KEY",
       "TONAPI_BASE_URL",
       "EVM_RECEIVER_AUTHORIZER_PRIVATE_KEY",
+      "NEAR_RELAYER_ACCOUNT_ID",
+      "NEAR_RELAYER_PRIVATE_KEY",
+      "NEAR_NETWORK",
+      "NEAR_RPC_URL",
       "CCD_FACILITATOR_PRIVATE_KEY",
       "CCD_FACILITATOR_ADDRESS"
     ]

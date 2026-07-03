@@ -9,6 +9,7 @@ import { ExactAptosScheme } from "@x402/aptos/exact/server";
 import { ExactHederaScheme } from "@x402/hedera/exact/server";
 import { KEETA_TESTNET_CAIP2 } from "@x402/keeta";
 import { ExactKeetaScheme } from "@x402/keeta/exact/server";
+import { ExactNearScheme } from "@x402/near/exact/server";
 import { ExactStellarScheme } from "@x402/stellar/exact/server";
 import { ExactTvmScheme } from "@x402/tvm/exact/server";
 import { ExactAvmScheme } from "@x402/avm/exact/server";
@@ -41,6 +42,10 @@ export const KEETA_NETWORK = (process.env.KEETA_NETWORK || KEETA_TESTNET_CAIP2) 
 export const STELLAR_NETWORK = (process.env.STELLAR_NETWORK ||
   "stellar:testnet") as `${string}:${string}`;
 export const TVM_NETWORK = (process.env.TVM_NETWORK || "tvm:-3") as `${string}:${string}`;
+export const NEAR_PAYEE_ADDRESS = process.env.NEAR_PAYEE_ADDRESS as string | undefined;
+export const NEAR_NETWORK = (process.env.NEAR_NETWORK || "near:testnet") as `${string}:${string}`;
+export const NEAR_ASSET = process.env.NEAR_ASSET as string | undefined;
+export const NEAR_AMOUNT = process.env.NEAR_AMOUNT as string | undefined;
 export const CCD_NETWORK = (process.env.CCD_NETWORK || "ccd:4221332d34e1694168c2a0c0b3fd0f27") as `${string}:${string}`;
 export const CCD_PAYEE_ADDRESS = process.env.CCD_PAYEE_ADDRESS as string | undefined;
 export const CCD_WEATHER_PRICE_MICRO_CCD = "1000";
@@ -101,6 +106,9 @@ if (STELLAR_PAYEE_ADDRESS) {
 }
 if (TVM_PAYEE_ADDRESS) {
   server.register("tvm:*", new ExactTvmScheme());
+}
+if (NEAR_PAYEE_ADDRESS) {
+  server.register("near:*", new ExactNearScheme());
 }
 
 // Register Bazaar discovery extension
@@ -364,6 +372,38 @@ export const proxy = paymentProxy(
         },
       }
       : {}),
+    ...(NEAR_PAYEE_ADDRESS
+      ? {
+          "/api/exact/near": {
+            accepts: {
+              payTo: NEAR_PAYEE_ADDRESS,
+              scheme: "exact" as const,
+              price: {
+                amount: NEAR_AMOUNT || "1000000000000000000000",
+                asset: NEAR_ASSET || "wrap.testnet",
+              },
+              network: NEAR_NETWORK,
+            },
+            extensions: {
+              ...declareDiscoveryExtension({
+                output: {
+                  example: {
+                    message: "Protected NEAR endpoint accessed successfully",
+                    timestamp: "2024-01-01T00:00:00Z",
+                  },
+                  schema: {
+                    properties: {
+                      message: { type: "string" },
+                      timestamp: { type: "string" },
+                    },
+                    required: ["message", "timestamp"],
+                  },
+                },
+              }),
+            },
+          },
+        }
+      : {}),
     ...(STELLAR_PAYEE_ADDRESS
       ? {
           "/api/exact/stellar": {
@@ -565,6 +605,7 @@ export const config = {
     "/api/exact/aptos",
     "/api/exact/hedera",
     "/api/exact/keeta",
+    "/api/exact/near",
     "/api/exact/ccd",
     "/api/exact/stellar",
     "/api/exact/tvm",

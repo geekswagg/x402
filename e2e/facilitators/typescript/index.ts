@@ -78,6 +78,8 @@ import {
   type FacilitatorHighloadV3Signer,
 } from "@x402/tvm";
 import { ExactTvmScheme } from "@x402/tvm/exact/facilitator";
+import { createFacilitatorNearSigner, type FacilitatorNearSignerConfig } from "@x402/near";
+import { ExactNearScheme as ExactNearFacilitatorScheme } from "@x402/near/exact/facilitator";
 import * as KeetaNet from "@keetanetwork/keetanet-client";
 import crypto from "crypto";
 import dotenv from "dotenv";
@@ -111,6 +113,8 @@ const HEDERA_NETWORK = process.env.HEDERA_NETWORK || "hedera:testnet";
 const KEETA_NETWORK = process.env.KEETA_NETWORK || KEETA_TESTNET_CAIP2;
 const STELLAR_NETWORK = process.env.STELLAR_NETWORK || "stellar:testnet";
 const TVM_NETWORK = process.env.TVM_NETWORK || "tvm:-3";
+const NEAR_NETWORK = process.env.NEAR_NETWORK || "near:testnet";
+const NEAR_RPC_URL = process.env.NEAR_RPC_URL;
 const CCD_NETWORK = process.env.CCD_NETWORK || CONCORDIUM_TESTNET_CAIP2;
 const CCD_GRPC_URL =
   process.env.CCD_GRPC_URL || getConcordiumGrpcUrl(CCD_NETWORK as Network);
@@ -272,6 +276,22 @@ if (process.env.TVM_PRIVATE_KEY) {
   });
   tvmSigner = toFacilitatorTvmSigner({ [TVM_NETWORK]: tvmConfig });
   console.info(`TVM Facilitator account: ${tvmSigner.getAddressesForNetwork(TVM_NETWORK)[0]}`);
+}
+
+// Initialize the NEAR facilitator (relayer) signer from account + key (optional)
+let nearSigner: ReturnType<typeof createFacilitatorNearSigner> | undefined;
+if (process.env.NEAR_RELAYER_ACCOUNT_ID && process.env.NEAR_RELAYER_PRIVATE_KEY) {
+  nearSigner = createFacilitatorNearSigner({
+    relayers: [
+      {
+        accountId: process.env.NEAR_RELAYER_ACCOUNT_ID,
+        secretKey: process.env
+          .NEAR_RELAYER_PRIVATE_KEY as FacilitatorNearSignerConfig["relayers"][number]["secretKey"],
+      },
+    ],
+    rpcUrls: NEAR_RPC_URL ? { [NEAR_NETWORK]: NEAR_RPC_URL } : undefined,
+  });
+  console.info(`NEAR Facilitator relayer: ${process.env.NEAR_RELAYER_ACCOUNT_ID}`);
 }
 
 let concordiumSigner: ReturnType<typeof toConcordiumFacilitatorSigner> | undefined;
@@ -525,6 +545,9 @@ if (stellarSigner) {
 }
 if (tvmSigner) {
   facilitator.register(TVM_NETWORK as Network, new ExactTvmScheme(tvmSigner));
+}
+if (nearSigner) {
+  facilitator.register(NEAR_NETWORK as Network, new ExactNearFacilitatorScheme(nearSigner));
 }
 if (concordiumSigner) {
   facilitator.register(
@@ -854,6 +877,7 @@ app.get("/health", (req, res) => {
     hederaNetwork: hederaSigner ? HEDERA_NETWORK : "(not configured)",
     keetaNetwork: process.env.KEETA_FACILITATOR_MNEMONIC ? KEETA_NETWORK : "(not configured)",
     stellarNetwork: stellarSigner ? STELLAR_NETWORK : "(not configured)",
+    nearNetwork: nearSigner ? NEAR_NETWORK : "(not configured)",
     ccdNetwork: concordiumSigner ? CCD_NETWORK : "(not configured)",
     facilitator: "typescript",
     version: "2.0.0",
@@ -890,6 +914,7 @@ let server = app.listen(parseInt(PORT), () => {
 ║  Aptos Network: ${APTOS_NETWORK}                       ║
 ║  Hedera Network: ${HEDERA_NETWORK}                     ║
 ║  Keeta Network: ${KEETA_NETWORK}                       ║
+║  NEAR Network: ${NEAR_NETWORK}                         ║
 ║  CCD Network:  ${CCD_NETWORK}                          ║
 ║  EVM Address:  ${evmAccount.address}                   ║
 ║  AVM Address:  ${avmSigner ? avmSigner.getAddresses()[0] : "(not configured)"}
@@ -897,6 +922,7 @@ let server = app.listen(parseInt(PORT), () => {
 ║  Hedera Address: ${process.env.HEDERA_ACCOUNT_ID || "(not configured)"} ║
 ║  Keeta Address: ${keetaSigner?.getAddresses()[0] || "(not configured)"} ║
 ║  Stellar Address: ${stellarSigner ? stellarSigner.address : "(not configured)"} ║
+║  NEAR Address: ${process.env.NEAR_RELAYER_ACCOUNT_ID || "(not configured)"} ║
 ║  CCD Address:  ${concordiumSigner ? concordiumSigner.getAddress() : "(not configured)"} ║
 ║  Extensions:   bazaar                                  ║
 ║                                                        ║

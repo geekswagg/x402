@@ -6,7 +6,7 @@
  */
 
 export type NetworkMode = 'testnet' | 'mainnet';
-export type ProtocolFamily = 'evm' | 'svm' | 'avm' | 'aptos' | 'hedera' | 'keeta' | 'stellar' | 'ccd' | 'tvm';
+export type ProtocolFamily = 'evm' | 'svm' | 'avm' | 'aptos' | 'hedera' | 'keeta' | 'near' | 'stellar' | 'ccd' | 'tvm';
 
 export type NetworkConfig = {
   name: string;
@@ -25,6 +25,7 @@ export type NetworkSet = {
   stellar: NetworkConfig;
   ccd: NetworkConfig;
   tvm: NetworkConfig;
+  near: NetworkConfig;
 };
 
 /**
@@ -79,6 +80,11 @@ const NETWORK_SETS: Record<NetworkMode, NetworkSet> = {
       caip2: 'tvm:-3',
       rpcUrl: process.env.TONCENTER_TESTNET_BASE_URL || 'https://testnet.toncenter.com',
     },
+    near: {
+      name: 'NEAR Testnet',
+      caip2: 'near:testnet',
+      rpcUrl: process.env.NEAR_TESTNET_RPC_URL || 'https://rpc.testnet.fastnear.com',
+    },
   },
   mainnet: {
     evm: {
@@ -128,6 +134,11 @@ const NETWORK_SETS: Record<NetworkMode, NetworkSet> = {
       caip2: 'tvm:-239',
       rpcUrl: process.env.TONCENTER_MAINNET_BASE_URL || 'https://toncenter.com',
     },
+    near: {
+      name: 'NEAR',
+      caip2: 'near:mainnet',
+      rpcUrl: process.env.NEAR_RPC_URL || 'https://rpc.mainnet.fastnear.com',
+    },
   },
 };
 
@@ -162,7 +173,7 @@ export function resolveEvmPermit2Asset(networks: NetworkSet): string {
  * Get network config for a protocol family in a given mode
  *
  * @param mode - 'testnet' or 'mainnet'
- * @param protocolFamily - 'evm', 'svm', 'avm', 'aptos', 'hedera', 'stellar', 'ccd', or 'tvm'
+ * @param protocolFamily - 'evm', 'svm', 'avm', 'aptos', 'hedera', 'near', 'stellar', 'ccd', or 'tvm'
  * @returns NetworkConfig for the specified protocol
  */
 export function getNetworkForProtocol(
@@ -180,6 +191,6 @@ export function getNetworkForProtocol(
  */
 export function getNetworkModeDescription(mode: NetworkMode): string {
   const set = NETWORK_SETS[mode];
-  const networks = [set.evm.name, set.svm.name, set.avm.name, set.aptos.name, set.hedera.name, set.keeta.name, set.stellar.name, set.ccd.name, set.tvm.name];
+  const networks = [set.evm.name, set.svm.name, set.avm.name, set.aptos.name, set.hedera.name, set.keeta.name, set.near.name, set.stellar.name, set.ccd.name, set.tvm.name];
   return networks.join(' + ');
 }
